@@ -136,13 +136,6 @@ Start command:
 npm start
 ```
 
-Docker:
-
-```bash
-docker build -t suna .
-docker run --env-file .env -p 8787:8787 suna
-```
-
 Health check:
 
 ```text
