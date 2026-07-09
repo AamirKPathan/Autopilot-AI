@@ -1,0 +1,62 @@
+{
+  "name": "local-ai-employee",
+  "description": "Canonical map for the local AI worker stack.",
+  "components": {
+    "suna": {
+      "role": "primary-worker",
+      "location": "services/suna",
+      "status": "unconfigured",
+      "notes": "Main task executor. Source repo: https://github.com/kortix-ai/suna. Chooses tools, asks for approval when needed, saves artifacts."
+    },
+    "hermes": {
+      "role": "reviewer",
+      "location": "services/hermes",
+      "status": "unconfigured",
+      "notes": "Post-task reviewer. Source repo: https://github.com/NousResearch/hermes-agent. Summarizes outcomes and extracts playbooks."
+    },
+    "mobileBackend": {
+      "role": "mobile-control-plane",
+      "location": "services/mobile-backend",
+      "status": "deferred",
+      "notes": "Deferred for now while the core worker and approval flow are being stabilized."
+    },
+    "androidEmulator": {
+      "role": "execution-target",
+      "location": "infra/android-emulator",
+      "status": "deferred",
+      "notes": "Deferred for now until the mobile backend is back in scope."
+    },
+    "approvalSystem": {
+      "role": "policy-gate",
+      "location": "services/approval",
+      "status": "unconfigured",
+      "notes": "Stops risky actions and asks for explicit approval."
+    },
+    "logs": {
+      "role": "audit-trail",
+      "location": "logs",
+      "status": "local-folder",
+      "notes": "Task logs, execution traces, reviewer notes, and failure details."
+    },
+    "artifacts": {
+      "role": "output-store",
+      "location": "artifacts",
+      "status": "local-folder",
+      "notes": "Files, screenshots, exports, and generated deliverables."
+    },
+    "playbooks": {
+      "role": "workflow-library",
+      "location": "playbooks",
+      "status": "local-folder",
+      "notes": "Reusable workflows promoted from successful supervised runs."
+    }
+  },
+  "commandDefaults": {
+    "start": "scripts/start.ps1",
+    "stop": "scripts/stop.ps1",
+    "status": "scripts/status.ps1",
+    "mobileStart": "scripts/mobile-start.ps1",
+    "mobileView": "scripts/mobile-view.ps1",
+    "mobileStop": "scripts/mobile-stop.ps1"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist
+release
+logs
+artifacts
+tools
+services
+.env
+.git

@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: suna
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_REQUIRED
+        value: "true"
+      - key: MONGODB_DB
+        value: suna
+      - key: SESSION_DAYS
+        value: "30"
+      - key: APP_BASE_URL
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUNA_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: SUNA_MODEL
+        value: llama-3.3-70b-versatile
+      - key: HERMES_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: HERMES_MODEL
+        value: llama-3.3-70b-versatile
+      - key: AI_MAX_TOKENS
+        value: "700"
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_TENANT_ID
+        value: common
+      - key: MICROSOFT_REDIRECT_URI
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PLUS_PRICE_ID
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: STRIPE_TEAM_PRICE_ID
+        sync: false
+      - key: STRIPE_ENTERPRISE_PRICE_ID
+        sync: false
