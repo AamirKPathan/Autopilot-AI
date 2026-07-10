@@ -182,6 +182,10 @@ function App() {
   const [isSending, setIsSending] = useState(false);
   const [authState, setAuthState] = useState({ authenticated: false, authRequired: false, user: null, plans: [] });
   const [adminUsers, setAdminUsers] = useState([]);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginCode, setLoginCode] = useState('');
+  const [loginStatus, setLoginStatus] = useState('');
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
   const messagesEndRef = useRef(null);
 
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId) ?? chats[0], [activeChatId, chats]);
@@ -399,6 +403,48 @@ function App() {
     await refreshAuth();
   }
 
+  async function startEmailLogin(event) {
+    event.preventDefault();
+    setLoginStatus('Sending code...');
+    try {
+      const response = await fetch('/api/auth/email/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Email login failed');
+      }
+      setEmailCodeSent(true);
+      setLoginStatus(data.devCode ? `Dev code: ${data.devCode}` : data.message);
+    } catch (error) {
+      setLoginStatus(error instanceof Error ? error.message : 'Email login failed');
+    }
+  }
+
+  async function verifyEmailLogin(event) {
+    event.preventDefault();
+    setLoginStatus('Verifying...');
+    try {
+      const response = await fetch('/api/auth/email/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, code: loginCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Invalid code');
+      }
+      setLoginStatus('');
+      setEmailCodeSent(false);
+      setLoginCode('');
+      await refreshAuth();
+    } catch (error) {
+      setLoginStatus(error instanceof Error ? error.message : 'Email verification failed');
+    }
+  }
+
   async function loadAdminUsers() {
     try {
       const response = await fetch('/api/admin/users');
@@ -536,6 +582,71 @@ function App() {
 
     setModalType(null);
     setReportForm(emptyReport);
+  }
+
+  if (authState.authRequired && !authState.authenticated) {
+    return (
+      <main className="login-page">
+        <section className="login-panel" aria-labelledby="login-title">
+          <div className="login-brand">
+            <div className="brand-mark">S</div>
+            <span>Suna</span>
+          </div>
+
+          <div className="login-copy">
+            <h1 id="login-title">Sign in to Suna</h1>
+            <p>Use your workspace account to continue.</p>
+          </div>
+
+          <form className="login-form" onSubmit={emailCodeSent ? verifyEmailLogin : startEmailLogin}>
+            <label>
+              <span>Email</span>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </label>
+
+            {emailCodeSent ? (
+              <label>
+                <span>Code</span>
+                <input
+                  value={loginCode}
+                  onChange={(event) => setLoginCode(event.target.value)}
+                  placeholder="6-digit code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                />
+              </label>
+            ) : null}
+
+            <button className="send-button full-width" type="submit">
+              {emailCodeSent ? 'Verify code' : 'Continue with email'}
+            </button>
+          </form>
+
+          <div className="login-divider"><span>or</span></div>
+
+          <div className="login-providers">
+            <a className={`provider-button ${authState.providers?.google ? '' : 'disabled'}`} href="/api/auth/google/start" aria-disabled={!authState.providers?.google}>
+              <span>G</span>
+              Continue with Google
+            </a>
+            <a className={`provider-button ${authState.providers?.microsoft ? '' : 'disabled'}`} href="/api/auth/microsoft/start" aria-disabled={!authState.providers?.microsoft}>
+              <span>□</span>
+              Continue with Microsoft
+            </a>
+          </div>
+
+          {loginStatus ? <p className="login-status">{loginStatus}</p> : null}
+        </section>
+      </main>
+    );
   }
 
   return (

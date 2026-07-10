@@ -66,7 +66,36 @@ MICROSOFT_TENANT_ID=common
 MICROSOFT_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/microsoft/callback
 ```
 
-## 4. Stripe
+## 4. Google OAuth
+
+Create a Google Cloud OAuth client.
+
+Add this redirect URI:
+
+```text
+https://YOUR_DOMAIN/api/auth/google/callback
+```
+
+Required env:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/google/callback
+```
+
+## 5. Email Login
+
+Create a Resend account and verify a sending domain.
+
+Required env:
+
+```env
+RESEND_API_KEY=...
+EMAIL_FROM=Suna <login@YOUR_DOMAIN>
+```
+
+## 6. Stripe
 
 Create subscription products/prices for Plus, Pro, Team, and Enterprise.
 
@@ -95,7 +124,7 @@ STRIPE_TEAM_PRICE_ID=price_...
 STRIPE_ENTERPRISE_PRICE_ID=price_...
 ```
 
-## 5. AI Provider
+## 7. AI Provider
 
 Required env:
 
@@ -108,7 +137,7 @@ HERMES_MODEL=llama-3.3-70b-versatile
 AI_MAX_TOKENS=700
 ```
 
-## 6. App Settings
+## 8. App Settings
 
 Required env:
 
@@ -122,7 +151,7 @@ SESSION_DAYS=30
 
 `ADMIN_EMAILS` users become admins automatically after Microsoft login.
 
-## 7. Deploy Commands
+## 9. Deploy Commands
 
 Build command:
 

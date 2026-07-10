@@ -34,6 +34,11 @@ const microsoftClientId = process.env.MICROSOFT_CLIENT_ID ?? '';
 const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET ?? '';
 const microsoftTenant = process.env.MICROSOFT_TENANT_ID ?? 'common';
 const microsoftRedirectUri = process.env.MICROSOFT_REDIRECT_URI ?? `${appBaseUrl}/api/auth/microsoft/callback`;
+const googleClientId = process.env.GOOGLE_CLIENT_ID ?? '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+const googleRedirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${appBaseUrl}/api/auth/google/callback`;
+const resendApiKey = process.env.RESEND_API_KEY ?? '';
+const emailFrom = process.env.EMAIL_FROM ?? 'Suna <login@suna.local>';
 const adminEmails = new Set((process.env.ADMIN_EMAILS ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY ?? '';
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? '';
@@ -175,7 +180,7 @@ async function findUserById(userId) {
   return [...memoryDb.users.values()].find((user) => String(user.id) === String(userId)) ?? null;
 }
 
-async function upsertUserFromMicrosoft(profile) {
+async function upsertUserFromAuthProfile(profile) {
   const email = profile.email.toLowerCase();
   const now = new Date().toISOString();
   const role = adminEmails.has(email) ? 'admin' : 'user';
@@ -183,7 +188,9 @@ async function upsertUserFromMicrosoft(profile) {
     $set: {
       email,
       name: profile.name || email,
-      microsoftId: profile.microsoftId,
+      ...(profile.microsoftId ? { microsoftId: profile.microsoftId } : {}),
+      ...(profile.googleId ? { googleId: profile.googleId } : {}),
+      ...(profile.authProvider ? { authProvider: profile.authProvider } : {}),
       updatedAt: now,
       ...(role === 'admin' ? { role: 'admin', plan: 'admin', subscriptionStatus: 'admin' } : {}),
     },
@@ -208,7 +215,9 @@ async function upsertUserFromMicrosoft(profile) {
     ...(existing ?? { id: randomBytes(12).toString('hex'), tokensUsedToday: 0, tokenResetDate: todayKey(), createdAt: now }),
     email,
     name: profile.name || email,
-    microsoftId: profile.microsoftId,
+    ...(profile.microsoftId ? { microsoftId: profile.microsoftId } : {}),
+    ...(profile.googleId ? { googleId: profile.googleId } : {}),
+    ...(profile.authProvider ? { authProvider: profile.authProvider } : {}),
     role,
     plan: role === 'admin' ? 'admin' : existing?.plan ?? 'free',
     subscriptionStatus: role === 'admin' ? 'admin' : existing?.subscriptionStatus ?? 'free',
@@ -1712,6 +1721,8 @@ async function handleAuthMe(request, response) {
     user: publicUser(user),
     providers: {
       microsoft: Boolean(microsoftClientId && microsoftClientSecret),
+      google: Boolean(googleClientId && googleClientSecret),
+      email: Boolean(resendApiKey) || process.env.NODE_ENV !== 'production',
       mongo: usingMongo(),
       stripe: Boolean(stripe),
     },
@@ -1808,7 +1819,7 @@ async function handleMicrosoftCallback(request, response, requestUrl) {
     return;
   }
 
-  const user = await upsertUserFromMicrosoft(profile);
+  const user = await upsertUserFromAuthProfile({ ...profile, authProvider: 'microsoft' });
   const sessionToken = await createSession(user);
   sendRedirect(response, '/', {
     'Set-Cookie': [
@@ -1816,6 +1827,188 @@ async function handleMicrosoftCallback(request, response, requestUrl) {
       cookieHeader('suna_oauth_state', '', { maxAge: 0 }),
     ],
   });
+}
+
+async function handleGoogleStart(request, response) {
+  if (!googleClientId || !googleClientSecret) {
+    sendJson(response, 503, { error: 'Google OAuth is not configured.' });
+    return;
+  }
+
+  const state = randomBytes(24).toString('base64url');
+  const params = new URLSearchParams({
+    client_id: googleClientId,
+    response_type: 'code',
+    redirect_uri: googleRedirectUri,
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account',
+  });
+  sendRedirect(
+    response,
+    `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    { 'Set-Cookie': cookieHeader('suna_google_oauth_state', state, { maxAge: 600 }) },
+  );
+}
+
+async function handleGoogleCallback(request, response, requestUrl) {
+  const state = requestUrl.searchParams.get('state') ?? '';
+  const expectedState = parseCookies(request).suna_google_oauth_state ?? '';
+  const stateOk = state && expectedState
+    && state.length === expectedState.length
+    && timingSafeEqual(Buffer.from(state), Buffer.from(expectedState));
+  if (!stateOk) {
+    sendJson(response, 400, { error: 'Invalid OAuth state.' });
+    return;
+  }
+
+  const code = requestUrl.searchParams.get('code');
+  if (!code) {
+    sendJson(response, 400, { error: 'Missing Google OAuth code.' });
+    return;
+  }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
+      code,
+      redirect_uri: googleRedirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!tokenResponse.ok) {
+    throw new Error(`Google token exchange failed: ${tokenResponse.status}`);
+  }
+
+  const tokenData = await tokenResponse.json();
+  const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  if (!profileResponse.ok) {
+    throw new Error(`Google profile fetch failed: ${profileResponse.status}`);
+  }
+
+  const profile = await profileResponse.json();
+  const user = await upsertUserFromAuthProfile({
+    googleId: profile.sub,
+    name: profile.name,
+    email: profile.email,
+    authProvider: 'google',
+  });
+  const sessionToken = await createSession(user);
+  sendRedirect(response, '/', {
+    'Set-Cookie': [
+      cookieHeader(sessionCookieName, sessionToken, { maxAge: sessionDays * 24 * 60 * 60 }),
+      cookieHeader('suna_google_oauth_state', '', { maxAge: 0 }),
+    ],
+  });
+}
+
+async function saveEmailLoginCode(email, code) {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const codeHash = hashToken(code);
+  const db = await getDb();
+  if (db) {
+    await db.collection('emailLoginCodes').deleteMany({ email });
+    await db.collection('emailLoginCodes').insertOne({ email, codeHash, expiresAt, createdAt: new Date() });
+    return;
+  }
+
+  memoryDb.sessions.set(`email:${email}`, { email, codeHash, expiresAt });
+}
+
+async function verifyEmailLoginCode(email, code) {
+  const codeHash = hashToken(code);
+  const db = await getDb();
+  let record = null;
+  if (db) {
+    record = await db.collection('emailLoginCodes').findOne({ email, expiresAt: { $gt: new Date() } });
+  } else {
+    record = memoryDb.sessions.get(`email:${email}`);
+    if (record?.expiresAt <= new Date()) {
+      memoryDb.sessions.delete(`email:${email}`);
+      record = null;
+    }
+  }
+
+  if (!record || record.codeHash !== codeHash) {
+    return false;
+  }
+
+  if (db) {
+    await db.collection('emailLoginCodes').deleteMany({ email });
+  } else {
+    memoryDb.sessions.delete(`email:${email}`);
+  }
+  return true;
+}
+
+async function sendEmailLoginCode(email, code) {
+  if (!resendApiKey) {
+    return false;
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: emailFrom,
+      to: email,
+      subject: 'Your Suna login code',
+      text: `Your Suna login code is ${code}. It expires in 10 minutes.`,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Email send failed: ${response.status}`);
+  }
+  return true;
+}
+
+async function handleEmailStart(request, response) {
+  const payload = await readJson(request);
+  const email = String(payload.email ?? '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    sendJson(response, 400, { error: 'Enter a valid email address.' });
+    return;
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await saveEmailLoginCode(email, code);
+  const sent = await sendEmailLoginCode(email, code);
+  sendJson(response, 200, {
+    ok: true,
+    sent,
+    devCode: sent || process.env.NODE_ENV === 'production' ? undefined : code,
+    message: sent ? 'Check your email for a login code.' : 'Email provider is not configured yet.',
+  });
+}
+
+async function handleEmailVerify(request, response) {
+  const payload = await readJson(request);
+  const email = String(payload.email ?? '').trim().toLowerCase();
+  const code = String(payload.code ?? '').trim();
+  if (!email || !code) {
+    sendJson(response, 400, { error: 'Email and code are required.' });
+    return;
+  }
+
+  const ok = await verifyEmailLoginCode(email, code);
+  if (!ok) {
+    sendJson(response, 400, { error: 'Invalid or expired code.' });
+    return;
+  }
+
+  const user = await upsertUserFromAuthProfile({ email, name: email, authProvider: 'email' });
+  const sessionToken = await createSession(user);
+  sendJsonWithCookie(response, 200, { ok: true, user: publicUser(user) }, [
+    cookieHeader(sessionCookieName, sessionToken, { maxAge: sessionDays * 24 * 60 * 60 }),
+  ]);
 }
 
 async function handleLogout(request, response) {
@@ -2026,6 +2219,41 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       console.error('Microsoft auth callback error:', error);
       sendJson(response, 500, { error: 'Microsoft sign-in failed.' });
+    }
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/auth/google/start') {
+    await handleGoogleStart(request, response);
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/auth/google/callback') {
+    try {
+      await handleGoogleCallback(request, response, requestUrl);
+    } catch (error) {
+      console.error('Google auth callback error:', error);
+      sendJson(response, 500, { error: 'Google sign-in failed.' });
+    }
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/auth/email/start') {
+    try {
+      await handleEmailStart(request, response);
+    } catch (error) {
+      console.error('Email auth start error:', error);
+      sendJson(response, 500, { error: 'Email sign-in failed.' });
+    }
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/auth/email/verify') {
+    try {
+      await handleEmailVerify(request, response);
+    } catch (error) {
+      console.error('Email auth verify error:', error);
+      sendJson(response, 500, { error: 'Email verification failed.' });
     }
     return;
   }

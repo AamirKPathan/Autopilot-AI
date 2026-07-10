@@ -691,6 +691,122 @@ button:disabled {
   border: 0;
 }
 
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(96, 165, 250, 0.14), transparent 32%),
+    radial-gradient(circle at 90% 20%, rgba(52, 211, 153, 0.12), transparent 30%),
+    #0b0b0d;
+}
+
+.login-panel {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 20px;
+  border: 1px solid #27272f;
+  border-radius: 14px;
+  padding: 28px;
+  background: rgba(17, 17, 22, 0.94);
+  box-shadow: 0 24px 120px rgba(0, 0, 0, 0.52);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f4f4f5;
+  font-weight: 700;
+}
+
+.login-copy h1 {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.login-copy p,
+.login-status {
+  color: #a1a1aa;
+  font-size: 0.92rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.login-form span {
+  color: #d4d4d8;
+  font-size: 0.82rem;
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid #2f2f38;
+  border-radius: 10px;
+  background: #17171c;
+  color: #f4f4f5;
+  padding: 12px 13px;
+}
+
+.login-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: #71717a;
+  font-size: 0.78rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  height: 1px;
+  background: #27272f;
+}
+
+.login-providers {
+  display: grid;
+  gap: 10px;
+}
+
+.provider-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 1px solid #303039;
+  border-radius: 10px;
+  color: #f4f4f5;
+  background: #18181d;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.provider-button span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #111116;
+  font-size: 0.82rem;
+}
+
+.provider-button.disabled {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
